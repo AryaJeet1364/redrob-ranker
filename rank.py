@@ -432,15 +432,15 @@ def run_ranking(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--candidates', default='/content/drive/MyDrive/redrob_data/candidates_df.parquet')
-    parser.add_argument('--features', default='/content/drive/MyDrive/redrob_data/features_df.parquet')
-    parser.add_argument('--texts', default='/content/drive/MyDrive/redrob_data/candidate_texts.parquet')
-    parser.add_argument('--bm25', default='/content/drive/MyDrive/redrob_data/bm25_index.pkl')
-    parser.add_argument('--faiss', default='/content/drive/MyDrive/redrob_data/faiss_index.bin')
-    parser.add_argument('--id_map', default='/content/drive/MyDrive/redrob_data/id_map.npy')
-    parser.add_argument('--jd_vector', default='/content/drive/MyDrive/redrob_data/jd_vector.npy')
-    parser.add_argument('--jd_query', default='/content/drive/MyDrive/redrob_data/jd_query.txt')
-    parser.add_argument('--out', default='/content/drive/MyDrive/redrob_data/submission_v1.csv')
+    parser.add_argument('--candidates', default='./artifacts/candidates_df.parquet')
+    parser.add_argument('--features', default='./artifacts/features_df.parquet')
+    parser.add_argument('--texts', default='./artifacts/candidate_texts.parquet')
+    parser.add_argument('--bm25', default='./artifacts/bm25_index.pkl')
+    parser.add_argument('--faiss', default='./artifacts/faiss_index.bin')
+    parser.add_argument('--id_map', default='./artifacts/id_map.npy')
+    parser.add_argument('--jd_vector', default='./artifacts/jd_vector.npy')
+    parser.add_argument('--jd_query', default='./artifacts/jd_query.txt')
+    parser.add_argument('--out', default='./submission.csv')
     args = parser.parse_args()
 
     run_ranking(
