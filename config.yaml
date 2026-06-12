@@ -1,0 +1,35 @@
+model:
+  bi_encoder: "BAAI/bge-small-en-v1.5"
+  cross_encoder: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  embedding_dim: 384
+
+retrieval:
+  shortlist_size: 5000
+  ce_candidates: 200
+
+fusion_weights:
+  text_weight: 0.40
+  struct_weight: 0.60
+  bm25_weight: 0.55
+  faiss_weight: 0.45
+  ce_weight: 0.45
+  pre_ce_weight: 0.55
+
+structured_feature_weights:
+  title_score: 0.30
+  skill_depth_score: 0.18
+  career_ai_fraction: 0.18
+  product_company_fraction: 0.10
+  yoe_score: 0.14
+  education_score: 0.05
+  github_score: 0.05
+
+penalties:
+  consulting_only_multiplier: 0.15
+  honeypot_multiplier: 0.001
+  non_india_no_relocate_multiplier: 0.60
+
+behavioral:
+  notice_weight: 0.25
+  notice_floor: 0.75
+  career_quality_floor: 0.40
