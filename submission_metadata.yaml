@@ -1,34 +1,32 @@
-team_name: "AryaJeet-Ranker"
-
-primary_contact:
-  name: "Aryajeet Jha"
-  email: "your@email.com"
-  phone: "+91-XXXXXXXXXX"
-
-github_repo: "https://github.com/AryaJeet1364/redrob-ranker"
-sandbox_link: "https://huggingface.co/spaces/AryaJeet1364/redrob-ranker"
-
-reproduce_command: "python rank.py --candidates ./data/candidates.jsonl --out ./submission.csv"
-
+ai_tools_used:
+- Claude
+ai_usage_summary: Used Claude for architecture discussion, code review, and debugging.
+  All engineering decisions, weight tuning, and manual candidate audits were done
+  by the developer. No candidate data was fed to any external LLM. The ranking pipeline
+  runs fully offline with no API calls.
 compute:
-  platform: "Google Colab"
-  cpu_cores: 2
-  ram_gb: 12
-  python_version: "3.11"
-  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  platform: Google Colab (T4 GPU for precompute, CPU for ranking)
   pre_computation_required: true
   pre_computation_time_minutes: 45
-
-ai_tools_used:
-  - "Claude"
-
-methodology_summary: |
-  Hybrid retrieval (BM25 + BGE-small-en-v1.5) over 100K candidates,
-  union shortlist, structured feature scoring, behavioral multiplier,
-  cross-encoder reranking on top 200. Runtime: ~47 seconds on CPU.
-
+  python_version: '3.11'
+  uses_gpu_for_inference: false
 declarations:
-  read_submission_spec: true
   code_is_original_work: true
-  no_collusion: true
   honeypot_check_done: true
+  no_collusion: true
+  read_submission_spec: true
+  reproduction_tested: true
+github_repo: https://github.com/AryaJeet1364/redrob-ranker
+methodology_summary: 'Hybrid retrieval (BM25 + BGE-small-en-v1.5) over 100K candidates,
+  union shortlist of ~8K, structured feature scoring (title category, skill depth,
+  career AI fraction, behavioral availability multiplier), cross-encoder reranking
+  on top 200. Honeypot detection via date arithmetic. Runtime: ~47 seconds on CPU.'
+primary_contact:
+  email: YOUR_REAL_EMAIL
+  name: Aryajeet Jha
+  phone: +91-XXXXXXXXXX
+reproduce_command: python precompute.py --candidates ./data/candidates.jsonl --out_dir
+  ./artifacts && python rank.py --candidates ./data/candidates.jsonl --out submission.csv
+sandbox_link: https://huggingface.co/spaces/AryaJeet1364/redrob-ranker
+team_name: AryaJeet-Ranker
