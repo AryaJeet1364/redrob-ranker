@@ -23,10 +23,10 @@ methodology_summary: 'Hybrid retrieval (BM25 + BGE-small-en-v1.5) over 100K cand
   career AI fraction, behavioral availability multiplier), cross-encoder reranking
   on top 200. Honeypot detection via date arithmetic. Runtime: ~47 seconds on CPU.'
 primary_contact:
-  email: YOUR_REAL_EMAIL
+  email: aryajeet.jha@gmail.com
   name: Aryajeet Jha
-  phone: +91-XXXXXXXXXX
+  phone: see portal submission (omitted from public repo for privacy)
 reproduce_command: python precompute.py --candidates ./data/candidates.jsonl --out_dir
   ./artifacts && python rank.py --candidates ./data/candidates.jsonl --out submission.csv
-sandbox_link: https://huggingface.co/spaces/AryaJeet1364/redrob-ranker
-team_name: AryaJeet-Ranker
+sandbox_link: https://huggingface.co/spaces/Aryajeet/redrob-ranker
+team_name: Diameter
