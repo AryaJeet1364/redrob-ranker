@@ -1,3 +1,6 @@
+import os
+os.environ['HF_HUB_OFFLINE'] = '1'
+os.environ['TRANSFORMERS_OFFLINE'] = '1'
 
 import pandas as pd
 import numpy as np
@@ -7,48 +10,29 @@ import re
 import time
 import argparse
 import csv
-import os
 from sentence_transformers import CrossEncoder
-
-# ============================================================
-# CONFIG — tune these weights on Day 6
-# ============================================================
-# WEIGHTS = {
-#     'title_score': 0.30,
-#     'skill_depth_score': 0.22,
-#     'career_ai_fraction': 0.18,
-#     'product_company_fraction': 0.10,
-#     'yoe_score': 0.10,
-#     'education_score': 0.05,
-#     'github_score': 0.05,
-# }
 
 WEIGHTS = {
     'title_score': 0.30,
-    'skill_depth_score': 0.16,      # REDUCED from 0.22
+    'skill_depth_score': 0.16,
     'career_ai_fraction': 0.18,
     'product_company_fraction': 0.10,
-    'yoe_score': 0.16,              # INCREASED from 0.10
+    'yoe_score': 0.16,
     'education_score': 0.05,
     'github_score': 0.05,
 }
 
-# Score fusion weights
-TEXT_WEIGHT = 0.40       # combined BM25 + FAISS
-STRUCT_WEIGHT = 0.60     # structured features
-
-# Within text score
+TEXT_WEIGHT = 0.40
+STRUCT_WEIGHT = 0.60
 BM25_WEIGHT = 0.55
 FAISS_WEIGHT = 0.45
-
-# Cross-encoder blend
 CE_WEIGHT = 0.45
 PRE_CE_WEIGHT = 0.55
 
-CROSS_ENCODER_MODEL = 'cross-encoder/ms-marco-MiniLM-L-6-v2'
+CROSS_ENCODER_LOCAL_PATH = './model_cache/ms-marco-MiniLM-L-6-v2'
 CE_BATCH_SIZE = 16
-SHORTLIST_SIZE = 5000    # per retriever
-CE_CANDIDATES = 200      # apply cross-encoder to top N
+SHORTLIST_SIZE = 5000
+CE_CANDIDATES = 200
 
 CONSULTING_FIRMS = [
     'tcs', 'tata consultancy', 'infosys', 'wipro', 'accenture',
@@ -66,10 +50,6 @@ JD_HARD_SKILLS = [
     'nlp', 'natural language processing', 'transformers',
     'sentence-transformers', 'sentence transformers'
 ]
-
-# ============================================================
-# HELPERS
-# ============================================================
 
 def simple_tokenize(text):
     if not text:
@@ -93,16 +73,8 @@ def is_consulting(company):
     c = company.lower()
     return any(firm in c for firm in CONSULTING_FIRMS)
 
-# ============================================================
-# REASONING GENERATOR — template-based, zero hallucination
-# ============================================================
-
 def generate_reasoning(row, feat_row, rank):
-    """
-    Pull facts directly from parsed data. Never invent anything.
-    """
     title = str(row.get('current_title', ''))
-    company = str(row.get('current_company', ''))
     yoe = float(row.get('years_of_experience', 0))
     location = str(row.get('location', ''))
     country = str(row.get('country', ''))
@@ -110,7 +82,6 @@ def generate_reasoning(row, feat_row, rank):
     skill_names = safe_list(row.get('skill_names', []))
     skill_profs = safe_list(row.get('skill_proficiencies', []))
 
-    # Find top JD-matching skills
     matching_skills = []
     for name, prof in zip(skill_names, skill_profs):
         if not name:
@@ -121,10 +92,8 @@ def generate_reasoning(row, feat_row, rank):
             matching_skills.append(f"{name} ({prof})")
     top_skills = ', '.join(matching_skills[:3]) if matching_skills else 'adjacent ML skills'
 
-    # Location string
     loc_str = f"{location}, {country}" if location else country
 
-    # Concerns
     concerns = []
     notice = int(feat_row.get('notice_period_days', 90))
     if notice > 90:
@@ -138,19 +107,14 @@ def generate_reasoning(row, feat_row, rank):
         if not feat_row.get('willing_to_relocate', False):
             concerns.append(f"based in {country}, not open to relocate")
 
-    # Build reasoning
     strengths = f"{yoe:.0f} yrs exp as {title}; key skills: {top_skills}; {loc_str}"
     if concerns:
         concern_str = '; concern: ' + ', '.join(concerns[:2])
     else:
         concern_str = '; strong availability signals'
 
-    return (strengths + concern_str)[:200]  # cap at 200 chars
+    return (strengths + concern_str)[:200]
 
-
-# ============================================================
-# MAIN RANKING PIPELINE
-# ============================================================
 
 def run_ranking(
     candidates_path,
@@ -166,9 +130,6 @@ def run_ranking(
     stage_times = {}
     total_start = time.time()
 
-    # ----------------------------------------------------------
-    # LOAD ARTIFACTS
-    # ----------------------------------------------------------
     t = time.time()
     print("Loading artifacts...")
 
@@ -191,13 +152,9 @@ def run_ranking(
     stage_times['load'] = time.time() - t
     print(f"  Load time: {stage_times['load']:.1f}s")
 
-    # ----------------------------------------------------------
-    # HYBRID RETRIEVAL
-    # ----------------------------------------------------------
     t = time.time()
     print("Running hybrid retrieval...")
 
-    # BM25
     query_tokens = simple_tokenize(jd_query_text)
     bm25_scores_arr = bm25.get_scores(query_tokens)
     bm25_top_indices = np.argsort(bm25_scores_arr)[::-1][:SHORTLIST_SIZE]
@@ -205,21 +162,16 @@ def run_ranking(
     bm25_score_map = {bm25_ids[i]: bm25_scores_arr[i] for i in bm25_top_indices}
     bm25_max = bm25_scores_arr[bm25_top_indices[0]]
 
-    # FAISS
     query_vec = jd_vector.reshape(1, -1)
     faiss_scores_raw, faiss_indices = index.search(query_vec, SHORTLIST_SIZE)
     faiss_top_ids = set(id_map[i] for i in faiss_indices[0])
     faiss_score_map = {id_map[faiss_indices[0][i]]: float(faiss_scores_raw[0][i])
                        for i in range(len(faiss_indices[0]))}
 
-    # Union shortlist
     shortlist_ids = list(bm25_top_ids | faiss_top_ids)
     stage_times['retrieval'] = time.time() - t
     print(f"  Shortlist size: {len(shortlist_ids):,} | Time: {stage_times['retrieval']:.1f}s")
 
-    # ----------------------------------------------------------
-    # STRUCTURED FEATURE SCORING ON SHORTLIST
-    # ----------------------------------------------------------
     t = time.time()
     print("Computing structured scores...")
 
@@ -230,30 +182,24 @@ def run_ranking(
 
         fr = feat.loc[cid]
 
-        # Skip honeypots entirely
         if fr.get('honeypot_flag', 0) == 1:
             continue
 
-        # Structured score
         struct_score = sum(
             WEIGHTS[col] * float(fr.get(col, 0))
             for col in WEIGHTS
         )
 
-        # Consulting-only hard penalty
         if fr.get('consulting_only_flag', 0) == 1:
             struct_score *= 0.15
 
-        # Text scores (normalized)
         bm25_norm = bm25_score_map.get(cid, 0) / bm25_max if bm25_max > 0 else 0
-        faiss_sim = faiss_score_map.get(cid, 0)  # already 0-1
+        faiss_sim = faiss_score_map.get(cid, 0)
 
         text_score = BM25_WEIGHT * bm25_norm + FAISS_WEIGHT * faiss_sim
 
-        # Raw fusion score
         raw_score = STRUCT_WEIGHT * struct_score + TEXT_WEIGHT * text_score
 
-        # Behavioral multiplier (multiplicative)
         behavioral = float(fr.get('behavioral_multiplier', 0.1))
         final_score = raw_score * behavioral
 
@@ -270,35 +216,21 @@ def run_ranking(
     stage_times['scoring'] = time.time() - t
     print(f"  Scored {len(results):,} candidates | Time: {stage_times['scoring']:.1f}s")
 
-    # ============================================================
-    # CAREER QUALITY FLOOR - Protect exceptional candidates
-    # ============================================================
     raw_scores = [r['raw_score'] for r in results]
     raw_95th = np.percentile(raw_scores, 95)
-    
+
     protected = 0
     for r in results:
         if r['raw_score'] >= raw_95th and r['behavioral'] < 0.4:
-            new_multiplier = 0.4
-            r['pre_ce_score'] = r['raw_score'] * new_multiplier
+            r['pre_ce_score'] = r['raw_score'] * 0.4
             protected += 1
-    
+
     print(f"  Career quality floor: protected {protected} exceptional candidates")
-    
-    # Re-sort after applying floor
     results.sort(key=lambda x: x['pre_ce_score'], reverse=True)
 
-
-
-    
-
-    # ----------------------------------------------------------
-    # CROSS-ENCODER RERANKING ON TOP 200
-    # ----------------------------------------------------------
     t = time.time()
     print(f"Running cross-encoder on top {CE_CANDIDATES}...")
 
-    # Load full JD text for cross-encoder (richer than query string)
     jd_full = """Senior AI Engineer role at Redrob AI. Requirements: production experience with
     embeddings-based retrieval systems, vector databases, hybrid search infrastructure,
     Python, evaluation frameworks for ranking systems (NDCG, MRR, MAP). Ideal candidate:
@@ -306,7 +238,7 @@ def run_ranking(
     product company background, not consulting-only. Values: scrappy product engineering,
     deep ML systems knowledge, retrieval and ranking expertise."""
 
-    ce_model = CrossEncoder(CROSS_ENCODER_MODEL)
+    ce_model = CrossEncoder(CROSS_ENCODER_LOCAL_PATH)
 
     top_200 = results[:CE_CANDIDATES]
     ce_pairs = []
@@ -321,14 +253,12 @@ def run_ranking(
     ce_scores_raw = ce_model.predict(ce_pairs, batch_size=CE_BATCH_SIZE,
                                       show_progress_bar=True)
 
-    # Normalize CE scores to 0-1
     ce_min, ce_max = ce_scores_raw.min(), ce_scores_raw.max()
     if ce_max > ce_min:
         ce_scores_norm = (ce_scores_raw - ce_min) / (ce_max - ce_min)
     else:
         ce_scores_norm = np.ones_like(ce_scores_raw) * 0.5
 
-    # Blend with pre-CE score
     pre_ce_scores = np.array([r['pre_ce_score'] for r in top_200])
     pre_min, pre_max = pre_ce_scores.min(), pre_ce_scores.max()
     if pre_max > pre_min:
@@ -339,35 +269,27 @@ def run_ranking(
     final_scores = CE_WEIGHT * ce_scores_norm + PRE_CE_WEIGHT * pre_ce_norm
 
     for i, r in enumerate(top_200):
-      cid = r['candidate_id']
-      if cid in df_raw.index:
-          country = str(df_raw.loc[cid].get('country', '')).lower()
-          willing = bool(df_raw.loc[cid].get('willing_to_relocate', False))
-          if country != 'india' and not willing:
-              final_scores[i] *= 0.60
+        cid = r['candidate_id']
+        if cid in df_raw.index:
+            country = str(df_raw.loc[cid].get('country', '')).lower()
+            willing = bool(df_raw.loc[cid].get('willing_to_relocate', False))
+            if country != 'india' and not willing:
+                final_scores[i] *= 0.60
 
     for i, r in enumerate(top_200):
         r['ce_score'] = float(ce_scores_norm[i])
         r['final_score'] = float(final_scores[i])
 
-    # Sort by final blended score
     top_200.sort(key=lambda x: x['final_score'], reverse=True)
-
-    # Remaining candidates (ranks 101-200 area) keep pre_ce_score
-    remaining = results[CE_CANDIDATES:]
 
     stage_times['ce'] = time.time() - t
     print(f"  Cross-encoder done | Time: {stage_times['ce']:.1f}s")
 
-    # ----------------------------------------------------------
-    # SELECT TOP 100 AND GENERATE REASONING
-    # ----------------------------------------------------------
     t = time.time()
     print("Generating reasoning and writing CSV...")
 
     top_100 = top_200[:100]
 
-    # Ensure scores are monotonically non-increasing
     max_final = top_100[0]['final_score']
     min_final = top_100[-1]['final_score']
     score_range = max_final - min_final if max_final > min_final else 1.0
@@ -375,15 +297,9 @@ def run_ranking(
     rows = []
     for rank, r in enumerate(top_100, 1):
         cid = r['candidate_id']
-
-        # Normalize to 0.10-0.99 range for submission score
-        # submission_score = 0.10 + 0.89 * (r['final_score'] - min_final) / score_range
-
-        # Normalize to 0.40-0.99 range for submission score (fixes score compression)
         submission_score = 0.40 + 0.59 * (r['final_score'] - min_final) / score_range
         submission_score = round(submission_score, 6)
 
-        # Get profile data
         if cid in df_raw.index:
             profile = df_raw.loc[cid]
             feat_row = feat.loc[cid].to_dict() if cid in feat.index else {}
@@ -398,12 +314,10 @@ def run_ranking(
             'reasoning': reasoning
         })
 
-    # Ensure monotonic scores (just in case)
     rows.sort(key=lambda x: x['score'], reverse=True)
     for i, row in enumerate(rows, 1):
         row['rank'] = i
 
-    # Write CSV
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=['candidate_id', 'rank', 'score', 'reasoning'])
         writer.writeheader()
@@ -416,13 +330,11 @@ def run_ranking(
     print(f"RANKING COMPLETE")
     print(f"{'='*50}")
     print(f"Total time: {total_time:.1f}s ({total_time/60:.1f} min)")
-    print(f"\nStage breakdown:")
     for stage, t_val in stage_times.items():
         print(f"  {stage:12s}: {t_val:.1f}s")
     print(f"\nOutput: {output_path}")
     print(f"Top candidate: {top_100[0]['candidate_id']} (score={rows[0]['score']})")
 
-    # Verify monotonic scores
     scores_list = [r['score'] for r in rows]
     is_monotonic = all(scores_list[i] >= scores_list[i+1] for i in range(len(scores_list)-1))
     print(f"Scores monotonically non-increasing: {is_monotonic}")
