@@ -79,74 +79,137 @@ def encode_jd_query(model):
     return jd_vector[0]
 
 
+# if __name__ == '__main__':
+#     print("="*60)
+#     print("DAY 4 — EMBEDDING GENERATION")
+#     print("="*60)
+
+#     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+#     print(f"Using device: {device}")
+#     if device == 'cpu':
+#         print("⚠️  WARNING: Running on CPU. This will take 2-3 hours.")
+#         print("   Consider switching to GPU runtime in Colab.")
+
+#     # Load model
+#     print(f"\nLoading model: {MODEL_NAME}")
+#     t0 = time.time()
+#     model = SentenceTransformer(MODEL_NAME)
+#     model.to(device)
+#     print(f"Model loaded in {time.time()-t0:.1f}s")
+
+#     # Load texts
+#     print("\nLoading candidate texts...")
+#     text_df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidate_texts.parquet')
+#     candidate_ids = text_df['candidate_id'].tolist()
+#     texts = text_df['candidate_text'].tolist()
+#     print(f"Loaded {len(texts):,} texts")
+
+#     # Encode candidates
+#     embeddings = encode_candidates(texts, candidate_ids, model)
+
+#     # Save embeddings
+#     emb_path = os.path.join(OUTPUT_DIR, 'embeddings.npy')
+#     np.save(emb_path, embeddings.astype(np.float32))
+#     print(f"\n✅ Saved embeddings to {emb_path}")
+#     print(f"   File size: {os.path.getsize(emb_path) / 1024**2:.1f} MB")
+
+#     # Save candidate ID mapping
+#     id_map_path = os.path.join(OUTPUT_DIR, 'id_map.npy')
+#     np.save(id_map_path, np.array(candidate_ids))
+#     print(f"✅ Saved id_map to {id_map_path}")
+
+#     # Build and save FAISS index
+#     index = build_faiss_index(embeddings)
+#     index_path = os.path.join(OUTPUT_DIR, 'faiss_index.bin')
+#     faiss.write_index(index, index_path)
+#     print(f"✅ Saved FAISS index to {index_path}")
+#     print(f"   File size: {os.path.getsize(index_path) / 1024**2:.1f} MB")
+
+#     # Encode JD query and save
+#     print("\nEncoding JD query...")
+#     jd_vector = encode_jd_query(model)
+#     jd_vec_path = os.path.join(OUTPUT_DIR, 'jd_vector.npy')
+#     np.save(jd_vec_path, jd_vector.astype(np.float32))
+#     print(f"✅ Saved JD vector to {jd_vec_path}")
+
+#     # Quick FAISS test
+#     print("\n--- FAISS RETRIEVAL TEST ---")
+#     query = jd_vector.reshape(1, -1).astype(np.float32)
+#     scores, indices = index.search(query, 20)
+
+#     df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidates_df.parquet')
+#     id_to_row = df.set_index('candidate_id')
+
+#     print(f"\nTop 20 FAISS results (cosine similarity):")
+#     for rank, (idx, score) in enumerate(zip(indices[0], scores[0]), 1):
+#         cid = candidate_ids[idx]
+#         try:
+#             row = id_to_row.loc[cid]
+#             print(f"  {rank:2}. [{score:.4f}] {cid} | {row['current_title']} at {row['current_company']}")
+#         except:
+#             print(f"  {rank:2}. [{score:.4f}] {cid}")
+
+#     print("\n✅ embedder.py complete")
+
+
 if __name__ == '__main__':
-    print("="*60)
-    print("DAY 4 — EMBEDDING GENERATION")
-    print("="*60)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', required=True, help='Path to candidate_texts.parquet')
+    parser.add_argument('--out_dir', required=True, help='Directory to save all embedding artifacts')
+    args = parser.parse_args()
+
+    os.makedirs(args.out_dir, exist_ok=True)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
-    if device == 'cpu':
-        print("⚠️  WARNING: Running on CPU. This will take 2-3 hours.")
-        print("   Consider switching to GPU runtime in Colab.")
 
-    # Load model
     print(f"\nLoading model: {MODEL_NAME}")
     t0 = time.time()
     model = SentenceTransformer(MODEL_NAME)
     model.to(device)
     print(f"Model loaded in {time.time()-t0:.1f}s")
 
-    # Load texts
-    print("\nLoading candidate texts...")
-    text_df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidate_texts.parquet')
+    print(f"\nLoading texts from {args.input}...")
+    text_df = pd.read_parquet(args.input)
     candidate_ids = text_df['candidate_id'].tolist()
     texts = text_df['candidate_text'].tolist()
     print(f"Loaded {len(texts):,} texts")
 
-    # Encode candidates
     embeddings = encode_candidates(texts, candidate_ids, model)
 
-    # Save embeddings
-    emb_path = os.path.join(OUTPUT_DIR, 'embeddings.npy')
+    emb_path = os.path.join(args.out_dir, 'embeddings.npy')
     np.save(emb_path, embeddings.astype(np.float32))
-    print(f"\n✅ Saved embeddings to {emb_path}")
-    print(f"   File size: {os.path.getsize(emb_path) / 1024**2:.1f} MB")
+    print(f"✅ Saved embeddings → {emb_path}")
 
-    # Save candidate ID mapping
-    id_map_path = os.path.join(OUTPUT_DIR, 'id_map.npy')
+    id_map_path = os.path.join(args.out_dir, 'id_map.npy')
     np.save(id_map_path, np.array(candidate_ids))
-    print(f"✅ Saved id_map to {id_map_path}")
+    print(f"✅ Saved id_map → {id_map_path}")
 
-    # Build and save FAISS index
     index = build_faiss_index(embeddings)
-    index_path = os.path.join(OUTPUT_DIR, 'faiss_index.bin')
+    index_path = os.path.join(args.out_dir, 'faiss_index.bin')
     faiss.write_index(index, index_path)
-    print(f"✅ Saved FAISS index to {index_path}")
-    print(f"   File size: {os.path.getsize(index_path) / 1024**2:.1f} MB")
+    print(f"✅ Saved FAISS index → {index_path}")
 
-    # Encode JD query and save
-    print("\nEncoding JD query...")
-    jd_vector = encode_jd_query(model)
-    jd_vec_path = os.path.join(OUTPUT_DIR, 'jd_vector.npy')
+    # JD query — hardcoded text, no file dependency
+    jd_query = """senior ai engineer founding team embeddings retrieval ranking vector database
+    production experience sentence transformers bge e5 vector database hybrid search
+    faiss pinecone weaviate qdrant elasticsearch opensearch python ndcg mrr map
+    hybrid retrieval dense retrieval bm25 semantic search reranking
+    machine learning nlp natural language processing transformers
+    information retrieval ranking systems evaluation frameworks"""
+
+    jd_text_with_prefix = BGE_QUERY_PREFIX + jd_query.strip()
+    jd_vector = model.encode([jd_text_with_prefix], normalize_embeddings=True,
+                              convert_to_numpy=True)[0]
+    jd_vec_path = os.path.join(args.out_dir, 'jd_vector.npy')
     np.save(jd_vec_path, jd_vector.astype(np.float32))
-    print(f"✅ Saved JD vector to {jd_vec_path}")
+    print(f"✅ Saved JD vector → {jd_vec_path}")
 
-    # Quick FAISS test
-    print("\n--- FAISS RETRIEVAL TEST ---")
-    query = jd_vector.reshape(1, -1).astype(np.float32)
-    scores, indices = index.search(query, 20)
-
-    df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidates_df.parquet')
-    id_to_row = df.set_index('candidate_id')
-
-    print(f"\nTop 20 FAISS results (cosine similarity):")
-    for rank, (idx, score) in enumerate(zip(indices[0], scores[0]), 1):
-        cid = candidate_ids[idx]
-        try:
-            row = id_to_row.loc[cid]
-            print(f"  {rank:2}. [{score:.4f}] {cid} | {row['current_title']} at {row['current_company']}")
-        except:
-            print(f"  {rank:2}. [{score:.4f}] {cid}")
+    # Also save jd_query.txt for rank.py to use
+    jd_query_path = os.path.join(args.out_dir, 'jd_query.txt')
+    with open(jd_query_path, 'w') as f:
+        f.write(jd_query.strip())
+    print(f"✅ Saved jd_query.txt → {jd_query_path}")
 
     print("\n✅ embedder.py complete")
