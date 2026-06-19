@@ -97,27 +97,42 @@ def build_all_texts(df):
 
     return candidate_ids, texts
 
+# Hardcoded paths
+
+# if __name__ == '__main__':
+#     print("Loading candidates...")
+#     df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidates_df.parquet')
+#     print(f"Loaded {len(df):,} candidates")
+
+#     candidate_ids, texts = build_all_texts(df)
+
+#     # Save candidate_ids and texts as a lightweight parquet
+#     text_df = pd.DataFrame({
+#         'candidate_id': candidate_ids,
+#         'candidate_text': texts
+#     })
+#     out_path = '/content/drive/MyDrive/redrob_data/candidate_texts.parquet'
+#     text_df.to_parquet(out_path, index=False)
+#     print(f"\n✅ Saved {len(text_df):,} text blocks to {out_path}")
+
 
 if __name__ == '__main__':
-    print("Loading candidates...")
-    df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidates_df.parquet')
+    import argparse, os
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', required=True, help='Path to candidates_df.parquet')
+    parser.add_argument('--output', required=True, help='Path to output texts parquet')
+    args = parser.parse_args()
+
+    print(f"Loading candidates from {args.input}...")
+    df = pd.read_parquet(args.input)
     print(f"Loaded {len(df):,} candidates")
 
     candidate_ids, texts = build_all_texts(df)
 
-    # Save candidate_ids and texts as a lightweight parquet
     text_df = pd.DataFrame({
         'candidate_id': candidate_ids,
         'candidate_text': texts
     })
-    out_path = '/content/drive/MyDrive/redrob_data/candidate_texts.parquet'
-    text_df.to_parquet(out_path, index=False)
-    print(f"\n✅ Saved {len(text_df):,} text blocks to {out_path}")
-
-    # Print samples
-    print("\n--- SAMPLE TEXTS ---")
-    for i in [0, 1, 2]:
-        print(f"\nCandidate: {candidate_ids[i]}")
-        print(f"Text length: {len(texts[i])} chars")
-        print(f"Preview: {texts[i][:300]}...")
-        print()
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    text_df.to_parquet(args.output, index=False)
+    print(f"\n✅ Saved {len(text_df):,} text blocks to {args.output}")
