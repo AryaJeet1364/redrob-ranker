@@ -78,23 +78,25 @@ def parse_candidate(c):
         'search_appearance_30d': sig.get('search_appearance_30d', 0),
     }
 
-print("📝 Parsing candidates...")
-records = []
-input_file = '/content/redrob_work/data/candidates.jsonl'
-output_file = '/content/drive/MyDrive/redrob_data/candidates_df.parquet'
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', required=True, help='Path to candidates.jsonl')
+    parser.add_argument('--output', required=True, help='Path to output parquet')
+    args = parser.parse_args()
 
-with open(input_file, 'rb') as f:
-    for i, line in enumerate(tqdm(f, total=100000, desc="Parsing JSONL")):
-        if line.strip():
-            try:
-                data = orjson.loads(line)
-                records.append(parse_candidate(data))
-            except Exception as e:
-                print(f"Error at line {i}: {e}")
-                continue
+    print(f"📝 Parsing candidates from {args.input}...")
+    records = []
+    with open(args.input, 'rb') as f:
+        for i, line in enumerate(tqdm(f, total=100000, desc="Parsing JSONL")):
+            if line.strip():
+                try:
+                    records.append(parse_candidate(orjson.loads(line)))
+                except Exception as e:
+                    print(f"Error at line {i}: {e}")
+                    continue
 
-print(f"✅ Parsed {len(records)} candidates")
-df = pd.DataFrame(records)
-df.to_parquet(output_file, index=False)
-print(f"✅ Saved to {output_file}")
-print(f"   Rows: {len(df):,}, Columns: {len(df.columns)}")
+    df = pd.DataFrame(records)
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    df.to_parquet(args.output, index=False)
+    print(f"✅ Parsed {len(df):,} candidates → {args.output}")
+    print(f"   Rows: {len(df):,}, Columns: {len(df.columns)}")
