@@ -8,3 +8,4 @@ tqdm==4.67.1
 orjson==3.10.18
 torch==2.6.0
 transformers==4.51.3
+torchvision==0.21.0
