@@ -416,13 +416,34 @@ def compute_all_features(df):
         })
     return pd.DataFrame(features)
 
+# Hardcoded paths
+
+# if __name__ == '__main__':
+#     print("Loading candidates...")
+#     df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidates_df.parquet')
+#     print(f"Loaded {len(df):,} candidates")
+#     features_df = compute_all_features(df)
+#     out_path = '/content/drive/MyDrive/redrob_data/features_df.parquet'
+#     features_df.to_parquet(out_path, index=False)
+#     print(f"\n✅ Saved features to {out_path}")
+#     print(f"   Shape: {features_df.shape}")
+#     print(features_df.describe())
+
 if __name__ == '__main__':
-    print("Loading candidates...")
-    df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidates_df.parquet')
+    import argparse, os
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', required=True, help='Path to candidates_df.parquet')
+    parser.add_argument('--output', required=True, help='Path to output features parquet')
+    args = parser.parse_args()
+
+    print(f"Loading candidates from {args.input}...")
+    df = pd.read_parquet(args.input)
     print(f"Loaded {len(df):,} candidates")
+
     features_df = compute_all_features(df)
-    out_path = '/content/drive/MyDrive/redrob_data/features_df.parquet'
-    features_df.to_parquet(out_path, index=False)
-    print(f"\n✅ Saved features to {out_path}")
+
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    features_df.to_parquet(args.output, index=False)
+    print(f"\n✅ Saved features to {args.output}")
     print(f"   Shape: {features_df.shape}")
     print(features_df.describe())
