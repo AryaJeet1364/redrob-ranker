@@ -2,6 +2,7 @@ import orjson
 import pandas as pd
 from tqdm import tqdm
 import gc
+import argparse
 import os
 
 def parse_candidate(c):
