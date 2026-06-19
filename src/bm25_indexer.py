@@ -44,69 +44,104 @@ def build_jd_query():
     """
     return jd_query.strip()
 
+# Hardcoded paths
+
+# if __name__ == '__main__':
+#     print("Loading candidate texts...")
+#     text_df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidate_texts.parquet')
+#     print(f"Loaded {len(text_df):,} text blocks")
+
+#     # Tokenize all texts
+#     print("\nTokenizing candidate texts...")
+#     t0 = time.time()
+#     tokenized_corpus = []
+#     for text in tqdm(text_df['candidate_text'], desc="Tokenizing"):
+#         tokenized_corpus.append(simple_tokenize(text))
+#     print(f"Tokenization done in {time.time()-t0:.1f}s")
+
+#     # Build BM25 index
+#     print("\nBuilding BM25 index (this takes 2-3 minutes)...")
+#     t1 = time.time()
+#     bm25 = BM25Okapi(tokenized_corpus)
+#     print(f"BM25 index built in {time.time()-t1:.1f}s")
+
+#     # Save index
+#     index_path = '/content/drive/MyDrive/redrob_data/bm25_index.pkl'
+#     print(f"\nSaving BM25 index to {index_path}...")
+#     with open(index_path, 'wb') as f:
+#         pickle.dump({
+#             'bm25': bm25,
+#             'candidate_ids': text_df['candidate_id'].tolist(),
+#             'tokenized_corpus': tokenized_corpus
+#         }, f, protocol=pickle.HIGHEST_PROTOCOL)
+#     print(f"✅ Saved BM25 index")
+
+#     # Quick retrieval test
+#     print("\n--- BM25 RETRIEVAL TEST ---")
+#     jd_query = build_jd_query()
+#     query_tokens = simple_tokenize(jd_query)
+#     print(f"Query tokens (first 20): {query_tokens[:20]}")
+
+#     scores = bm25.get_scores(query_tokens)
+#     top_indices = np.argsort(scores)[::-1][:20]
+
+#     print(f"\nTop 20 BM25 results:")
+#     candidate_ids = text_df['candidate_id'].tolist()
+
+#     # Load original data for display
+#     df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidates_df.parquet')
+#     id_to_row = df.set_index('candidate_id')
+
+#     for rank, idx in enumerate(top_indices, 1):
+#         cid = candidate_ids[idx]
+#         score = scores[idx]
+#         try:
+#             row = id_to_row.loc[cid]
+#             title = row['current_title']
+#             company = row['current_company']
+#             print(f"  {rank:2}. [{score:.2f}] {cid} | {title} at {company}")
+#         except:
+#             print(f"  {rank:2}. [{score:.2f}] {cid}")
+
+#     # Save score distribution info
+#     print(f"\nBM25 score stats:")
+#     print(f"  Max score: {scores.max():.2f}")
+#     print(f"  Mean score: {scores.mean():.2f}")
+#     print(f"  Std: {scores.std():.2f}")
+#     print(f"  Non-zero scores: {(scores > 0).sum():,}")
+#     print(f"  Top-1000 threshold: {np.sort(scores)[::-1][999]:.2f}")
+#     print(f"  Top-5000 threshold: {np.sort(scores)[::-1][4999]:.2f}")
+
+
+
 
 if __name__ == '__main__':
-    print("Loading candidate texts...")
-    text_df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidate_texts.parquet')
+    import argparse, os
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', required=True, help='Path to candidate_texts.parquet')
+    parser.add_argument('--output', required=True, help='Path to output bm25_index.pkl')
+    args = parser.parse_args()
+
+    print(f"Loading candidate texts from {args.input}...")
+    text_df = pd.read_parquet(args.input)
     print(f"Loaded {len(text_df):,} text blocks")
 
-    # Tokenize all texts
-    print("\nTokenizing candidate texts...")
+    print("\nTokenizing...")
+    import time
     t0 = time.time()
-    tokenized_corpus = []
-    for text in tqdm(text_df['candidate_text'], desc="Tokenizing"):
-        tokenized_corpus.append(simple_tokenize(text))
+    tokenized_corpus = [simple_tokenize(t) for t in tqdm(text_df['candidate_text'], desc="Tokenizing")]
     print(f"Tokenization done in {time.time()-t0:.1f}s")
 
-    # Build BM25 index
-    print("\nBuilding BM25 index (this takes 2-3 minutes)...")
+    print("\nBuilding BM25 index...")
     t1 = time.time()
     bm25 = BM25Okapi(tokenized_corpus)
     print(f"BM25 index built in {time.time()-t1:.1f}s")
 
-    # Save index
-    index_path = '/content/drive/MyDrive/redrob_data/bm25_index.pkl'
-    print(f"\nSaving BM25 index to {index_path}...")
-    with open(index_path, 'wb') as f:
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    with open(args.output, 'wb') as f:
         pickle.dump({
             'bm25': bm25,
             'candidate_ids': text_df['candidate_id'].tolist(),
             'tokenized_corpus': tokenized_corpus
         }, f, protocol=pickle.HIGHEST_PROTOCOL)
-    print(f"✅ Saved BM25 index")
-
-    # Quick retrieval test
-    print("\n--- BM25 RETRIEVAL TEST ---")
-    jd_query = build_jd_query()
-    query_tokens = simple_tokenize(jd_query)
-    print(f"Query tokens (first 20): {query_tokens[:20]}")
-
-    scores = bm25.get_scores(query_tokens)
-    top_indices = np.argsort(scores)[::-1][:20]
-
-    print(f"\nTop 20 BM25 results:")
-    candidate_ids = text_df['candidate_id'].tolist()
-
-    # Load original data for display
-    df = pd.read_parquet('/content/drive/MyDrive/redrob_data/candidates_df.parquet')
-    id_to_row = df.set_index('candidate_id')
-
-    for rank, idx in enumerate(top_indices, 1):
-        cid = candidate_ids[idx]
-        score = scores[idx]
-        try:
-            row = id_to_row.loc[cid]
-            title = row['current_title']
-            company = row['current_company']
-            print(f"  {rank:2}. [{score:.2f}] {cid} | {title} at {company}")
-        except:
-            print(f"  {rank:2}. [{score:.2f}] {cid}")
-
-    # Save score distribution info
-    print(f"\nBM25 score stats:")
-    print(f"  Max score: {scores.max():.2f}")
-    print(f"  Mean score: {scores.mean():.2f}")
-    print(f"  Std: {scores.std():.2f}")
-    print(f"  Non-zero scores: {(scores > 0).sum():,}")
-    print(f"  Top-1000 threshold: {np.sort(scores)[::-1][999]:.2f}")
-    print(f"  Top-5000 threshold: {np.sort(scores)[::-1][4999]:.2f}")
+    print(f"✅ Saved BM25 index to {args.output}")
